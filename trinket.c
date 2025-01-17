@@ -30,6 +30,23 @@ typedef struct {
 } Vector3;
 
 typedef struct {
+    uint32_t color;
+    Vector3 *a, *b;
+} Edge;
+
+typedef struct {
+    int vert_len, edge_len;
+    Vector3 position, *vertices;
+    Edge *edges;
+} Mesh;
+
+typedef struct {
+    int len;
+    Vector3 position, scale, rotation;
+    Mesh meshes[128];
+} Scene;
+
+typedef struct {
     Vector3 *items;
     size_t capacity;
     size_t count;
@@ -45,7 +62,12 @@ typedef struct {
     float x, y;
 } Mouse;
 
+
+static Vector3 vertices[0x10000], *_vertices = &vertices[0];
+static Edge edges[0x8000], *_edges = &edges[0];
+static Scene scene;
 static Camera cam;
+static Mouse mouse;
 
 /* Helpers */
 
@@ -124,6 +146,28 @@ static Vector3 *addv3d(Vector3 *v, float x, float y, float z)
     return set3d(v, v->x+x, v->y+y, v->z+z);
 }
 
+static Vector3 add3d(Vector3 *a, Vector3 *b)
+{
+    return vector3(a->x + b->x, a->y + b->y, a->z + b->z);
+}
+
+static Vector3 mult3d(Vector3 *a, Vector3 *b)
+{
+    return vector3(a->x * b->x, a->y * b->y, a->z * b->z);
+}
+
+static Vector3 *translate3d(Vector3 *v, Vector3 *t)
+{
+    *v = add3d(v, t);
+    return v;
+}
+
+static Vector3 *scale3d(Vector3 *v, Vector3 *t)
+{
+    *v = mult3d(v, t);
+    return v;
+}
+
 static Vector3 *rot3d(Vector3 *p, Vector3 *o, Vector3 *t)
 {
     if (t->x){
@@ -142,6 +186,29 @@ static Vector3 *rot3d(Vector3 *p, Vector3 *o, Vector3 *t)
         p->y = r.y;
     }
     return p;
+}
+
+static Vector3 *addvertex(Mesh *m, float x, float y, float z)
+{
+    int i;
+    Vector3 v = vector3(x,y,z);
+    translate3d(&v, &scene.position);
+    scale3d(&v, &scene.scale);
+    rot3d(&v, &scene.position, &scene.rotation);
+    for (i=0; i < m->vert_len; ++i)
+        if (equ3d(m->vertices[i], v))
+            return &m->vertices[i];
+    m->vert_len++;
+    return set3d(_vertices++, v.x, v.y, v.z);
+}
+
+static Edge *addedge(Mesh *m, Vector3 *a, Vector3 *b, uint32_t color)
+{
+    _edges->a = a;
+    _edges->b = b;
+    _edges->color = color;
+    m->edge_len++;
+    return _edges++;
 }
 
 /********************************/
