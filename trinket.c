@@ -211,6 +211,54 @@ static Edge *addedge(Mesh *m, Vector3 *a, Vector3 *b, uint32_t color)
     return _edges++;
 }
 
+/* Primitives */
+
+static Mesh *addline(Mesh *m, Vector3 a, Vector3 b, uint32_t color)
+{
+    addedge(m, addvertex(m, a.x, a.y, a.z), addvertex(m, b.x, b.y, b.z), color);
+    return m;
+}
+
+/* Mesh transforms */
+
+Mesh *extrude(Mesh *m, float x, float y, float z, uint32_t color)
+{
+    int i, vl = m->vert_len, el = m->edge_len;
+    for (i=0; i<vl; i++)
+        addedge(m, &m->vertices[i], addvertex(m, m->vertices[i].x+x, m->vertices[i].y+y, m->vertices[i].z+z), color);
+    for (i=0; i<el; i++)
+        addedge(m, &m->vertices[vl + m->edges[i].a - &m->vertices[0]], &m->vertices[vl + m->edges[i].b - &m->vertices[0]], color);
+    return m;
+}
+
+/* Creation */
+
+Mesh *addmesh(Scene *s)
+{
+    if (s->len == 128) {
+        return NULL;
+    }
+    s->meshes[s->len].vertices = _vertices;
+    s->meshes[s->len].edges = _edges;
+    return &s->meshes[s->len++];
+}
+
+Mesh *createplane(Scene *s, float w, float h, float xsegs, float ysegs, uint32_t color)
+{
+    int ix, iy;
+    Mesh *m = addmesh(s);
+    for (ix=0; ix<xsegs+1; ix++)
+        addline(m, vector3(ix * (w/xsegs) - w/2, h/2, 0), vector3(ix * (w/xsegs) - w/2, -h/2, 0), color);
+    for (iy=0; iy<ysegs+1; iy++)
+        addline(m, vector3(w/2, iy * (h/ysegs) - h/2, 0), vector3(-w/2, iy * (h/ysegs) - h/2, 0), color);
+    return m;
+}
+
+Mesh *createbox(Scene *s, float w, float h, float z, uint32_t color)
+{
+    return extrude(createplane(s, w, h, 1, 1, color), 0, 0, z, color);
+}
+
 /********************************/
 
 int main(int argc, char* argv[]) {
