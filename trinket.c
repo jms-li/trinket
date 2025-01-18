@@ -219,6 +219,52 @@ static Mesh *addline(Mesh *m, Vector3 a, Vector3 b, uint32_t color)
     return m;
 }
 
+/* Drawing */
+
+static void drawline(uint32_t *dst, Vector2 p1, Vector2 p2, uint32_t color)
+{
+    int x1 = (int)p1.x, y1 = (int)p1.y, x2 = (int)p2.x, y2 = (int)p2.y;
+    int dx = abs(x2-x1), sx = x1 < x2 ? 1 : -1;
+    int dy = -abs(y2-y1), sy = y1 < y2 ? 1 : -1;
+    int err = dx + dy, e2;
+    for (;;) {
+        if (x1 > 0 && y1 > 0 && x1 < WIDTH && y1 < HEIGHT) {
+            dst[y1*WIDTH+x1] = color;
+        }
+        if (x1 == x2 && y1 == y2) break;
+        e2 = 2*err;
+        if (e2 >= dy) {
+            err += dy;
+            x1 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y1 += sy;
+        }
+    }
+}
+
+static void draw(uint32_t *dst) 
+{
+	int i, j;
+	for(i = 0; i < scene.len; i++) {
+		Mesh *m = &scene.meshes[i];
+		for(j = 0; j < m->edge_len; j++) {
+			Edge *edge = &m->edges[j];
+			Vector3 a = add3d(edge->a, &m->position);
+			Vector3 b = add3d(edge->b, &m->position);
+			rot3d(&a, &cam.origin, &cam.rotation);
+			rot3d(&b, &cam.origin, &cam.rotation);
+			drawline(pixels, cam_project(&cam, add3d(&cam.origin, &a)), cam_project(&cam, add3d(&cam.origin, &b)), edge->color);
+		}
+	}
+    dst = pixels;
+	SDL_UpdateTexture(texture, NULL, dst, WIDTH * sizeof(uint32_t));
+	SDL_RenderClear(renderer);
+	SDL_RenderCopy(renderer, texture, NULL, NULL);
+	SDL_RenderPresent(renderer);
+}
+
 /* Mesh transforms */
 
 Mesh *extrude(Mesh *m, float x, float y, float z, uint32_t color)
@@ -264,6 +310,14 @@ Mesh *createbox(Scene *s, float w, float h, float z, uint32_t color)
 int main(int argc, char* argv[]) {
     int result = 0;
 
+    scene.len = 0;
+    set3d(&scene.position, 0, 0, 0);
+    set3d(&scene.scale, 1, 1, 1);
+    set3d(&scene.rotation, 0, 0, 0);
+    cam.range = 100;
+    set3d(&cam.rotation, 180, 0, 0);
+    set3d(&cam.trotation, 180, 0, 0);
+
     if (SDL_Init(SDL_INIT_VIDEO) <0 ) return_defer(1);
 
     window = SDL_CreateWindow(
@@ -281,8 +335,9 @@ int main(int argc, char* argv[]) {
     if (texture == NULL) return_defer(1);
 
     SDL_SetWindowOpacity(window, 0.25f);
-
     
+    createbox(&scene, 20, 20, 20, 0xff00ff00);
+    draw(dst);    
     for (;;) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -290,26 +345,26 @@ int main(int argc, char* argv[]) {
                 return_defer(0);
             }
         }
+        draw(dst);
+        //SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
+        //SDL_RenderClear(renderer);
 
-        SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
-        SDL_RenderClear(renderer);
-
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        //SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         
-        Canvas can = jgl_canvas(pixels, WIDTH, HEIGHT, WIDTH);
-	    jgl_fill(can, BGCOLOR);
-	    jgl_fill_circle(can, WIDTH/2, HEIGHT/2, 100, 0xFF00FF00);
-        dst = pixels;
-        SDL_UpdateTexture(texture, &window_rect, dst, WIDTH*sizeof(uint32_t));
+//        Canvas can = jgl_canvas(pixels, WIDTH, HEIGHT, WIDTH);
+//	    jgl_fill(can, BGCOLOR);
+//	    jgl_fill_circle(can, WIDTH/2, HEIGHT/2, 100, 0xFF00FF00);
+ //       dst = pixels;
+//        SDL_UpdateTexture(texture, &window_rect, dst, WIDTH*sizeof(uint32_t));
 
         //SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
         //SDL_RenderClear(renderer);
 
-        SDL_RenderCopy(renderer, texture, NULL, &window_rect);
+//        SDL_RenderCopy(renderer, texture, NULL, &window_rect);
 //        SDL_Rect rect = {WIDTH/4, HEIGHT/4, WIDTH/2, HEIGHT/2};
 //        SDL_RenderFillRect(renderer, &rect);
 
-        SDL_RenderPresent(renderer);
+//        SDL_RenderPresent(renderer);
     }
 
     
