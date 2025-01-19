@@ -1,4 +1,5 @@
 #include <SDL.h>
+#include <stdio.h>
 #include "jgl.c"
 
 #define WIDTH 3072
@@ -267,6 +268,24 @@ static void draw(uint32_t *dst)
 
 /* Mesh transforms */
 
+Mesh *translate(Mesh *m, float x, float y, float z)
+{
+    int i;
+    Vector3 t = vector3(x, y, z);
+    for (i=0; i<m->vert_len; i++)
+        translate3d(&m->vertices[i], &t);
+    return m;
+}
+
+Mesh *rotate(Mesh *m, float pitch, float yaw, float roll)
+{
+    int i;
+    Vector3 t = vector3(pitch, yaw, roll);
+    for (i=0; i<m->vert_len; i++)
+        rot3d(&m->vertices[i], &m->position, &t);
+    return m;
+}
+
 Mesh *extrude(Mesh *m, float x, float y, float z, uint32_t color)
 {
     int i, vl = m->vert_len, el = m->edge_len;
@@ -336,7 +355,7 @@ int main(int argc, char* argv[]) {
 
     SDL_SetWindowOpacity(window, 0.25f);
     
-    createbox(&scene, 20, 20, 20, 0xff00ff00);
+    rotate(createbox(&scene, 20, 20, 20, 0xff00ff00), 120, 45, 0);
     draw(dst);    
     for (;;) {
         SDL_Event event;
