@@ -11,14 +11,13 @@
 
 /* Interface */
 
-static uint32_t pixels[WIDTH*HEIGHT] = {0};
+static uint32_t pixels[WIDTH*HEIGHT], *dst=&pixels[0];
 static float zbuffer[WIDTH*HEIGHT] = {0};
 
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 static SDL_Texture *texture = NULL;
 static SDL_Rect window_rect = {0, 0, WIDTH, HEIGHT};
-static uint32_t *dst;
 
 /* Abstraction */
 
@@ -189,6 +188,8 @@ static Vector3 *rot3d(Vector3 *p, Vector3 *o, Vector3 *t)
     return p;
 }
 
+/* Primitives */
+
 static Vector3 *addvertex(Mesh *m, float x, float y, float z)
 {
     int i;
@@ -212,8 +213,6 @@ static Edge *addedge(Mesh *m, Vector3 *a, Vector3 *b, uint32_t color)
     return _edges++;
 }
 
-/* Primitives */
-
 static Mesh *addline(Mesh *m, Vector3 a, Vector3 b, uint32_t color)
 {
     addedge(m, addvertex(m, a.x, a.y, a.z), addvertex(m, b.x, b.y, b.z), color);
@@ -221,6 +220,12 @@ static Mesh *addline(Mesh *m, Vector3 a, Vector3 b, uint32_t color)
 }
 
 /* Drawing */
+
+static void clear(uint32_t *dst)
+{
+    for (int i; i<WIDTH*HEIGHT; ++i)
+        dst[i] = BGCOLOR;
+}
 
 static void drawline(uint32_t *dst, Vector2 p1, Vector2 p2, uint32_t color)
 {
@@ -247,7 +252,8 @@ static void drawline(uint32_t *dst, Vector2 p1, Vector2 p2, uint32_t color)
 
 static void draw(uint32_t *dst) 
 {
-	int i, j;
+    clear(dst);	
+    int i, j;
 	for(i = 0; i < scene.len; i++) {
 		Mesh *m = &scene.meshes[i];
 		for(j = 0; j < m->edge_len; j++) {
@@ -274,6 +280,15 @@ Mesh *translate(Mesh *m, float x, float y, float z)
     Vector3 t = vector3(x, y, z);
     for (i=0; i<m->vert_len; i++)
         translate3d(&m->vertices[i], &t);
+    return m;
+}
+
+Mesh *scale(Mesh *m, float x, float y, float z)
+{
+    int i;
+    Vector3 t = vector3(x, y, z);
+    for (i=0; i<m->vert_len; i++)
+        scale3d(&m->vertices[i], &t);
     return m;
 }
 
@@ -324,6 +339,50 @@ Mesh *createbox(Scene *s, float w, float h, float z, uint32_t color)
     return extrude(createplane(s, w, h, 1, 1, color), 0, 0, z, color);
 }
 
+/* Options */
+
+static void update(Camera *c, double speed)
+{
+    if(!equ3d(c->rotation, c->trotation) || !equ3d(c->origin, c->torigin)) {
+        set3d(&c->rotation, lerp(c->rotation.x, c->trotation.x, speed, 1), lerp(c->rotation.y, c->trotation.y, speed, 1), lerp(c->rotation.z, c->trotation.z, speed, 1));
+        set3d(&c->origin, lerp(c->origin.x, c->torigin.x, speed, 1), lerp(c->origin.y, c->torigin.y, speed, 1), lerp(c->origin.z, c->torigin.z, speed, 1));                    
+     }
+}
+
+static void modrange(int mod)
+{
+    int res = cam.range + mod;
+    if (res > 0 && res < 90 ) cam.range = res;
+}
+
+static void handle_key(SDL_Event *event)
+{
+    int shift = SDL_GetModState() & KMOD_LSHIFT || SDL_GetModState() & KMOD_RSHIFT;
+
+    switch(event->key.keysym.sym) {
+    case SDLK_LEFT:
+    case SDLK_a:
+        if (shift) addv3d(&cam.torigin, 0.5, 0, 0);
+        else addv3d(&cam.trotation, 0, -10, 0);
+        break;
+    case SDLK_RIGHT:
+    case SDLK_d:
+        if (shift) addv3d(&cam.torigin, -0.5, 0, 0);
+        else addv3d(&cam.trotation, 0, 10, 0);
+        break;
+    case SDLK_UP:
+    case SDLK_w:
+        if (shift) addv3d(&cam.torigin, 0, 0.5, 0);
+        else addv3d(&cam.trotation, 10, 0, 0);
+        break;
+    case SDLK_DOWN:
+    case SDLK_s:
+        if (shift) addv3d(&cam.torigin, 0, -0.5, 0);
+        else addv3d(&cam.trotation, -10, 0, 0);
+        break;
+    }
+}
+
 /********************************/
 
 int main(int argc, char* argv[]) {
@@ -333,7 +392,7 @@ int main(int argc, char* argv[]) {
     set3d(&scene.position, 0, 0, 0);
     set3d(&scene.scale, 1, 1, 1);
     set3d(&scene.rotation, 0, 0, 0);
-    cam.range = 100;
+    cam.range = 50;
     set3d(&cam.rotation, 180, 0, 0);
     set3d(&cam.trotation, 180, 0, 0);
 
@@ -358,32 +417,24 @@ int main(int argc, char* argv[]) {
     rotate(createbox(&scene, 20, 20, 20, 0xff00ff00), 120, 45, 0);
     draw(dst);    
     for (;;) {
+        update(&cam, 5);
+        draw(dst);
+
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
+            switch(event.type) {
+            case SDL_QUIT:
                 return_defer(0);
+                break;
+            case SDL_KEYDOWN:
+                handle_key(&event);
+                break;
+            case SDL_MOUSEWHEEL:
+                modrange(event.wheel.y);
+                break;  
             }
         }
-        draw(dst);
-        //SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
-        //SDL_RenderClear(renderer);
-
-        //SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         
-//        Canvas can = jgl_canvas(pixels, WIDTH, HEIGHT, WIDTH);
-//	    jgl_fill(can, BGCOLOR);
-//	    jgl_fill_circle(can, WIDTH/2, HEIGHT/2, 100, 0xFF00FF00);
- //       dst = pixels;
-//        SDL_UpdateTexture(texture, &window_rect, dst, WIDTH*sizeof(uint32_t));
-
-        //SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
-        //SDL_RenderClear(renderer);
-
-//        SDL_RenderCopy(renderer, texture, NULL, &window_rect);
-//        SDL_Rect rect = {WIDTH/4, HEIGHT/4, WIDTH/2, HEIGHT/2};
-//        SDL_RenderFillRect(renderer, &rect);
-
-//        SDL_RenderPresent(renderer);
     }
 
     
